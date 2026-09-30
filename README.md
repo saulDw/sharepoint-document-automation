@@ -55,6 +55,7 @@ textarea {
   border: 1px solid rgba(255, 255, 255, 0.12);
   padding: 18px;
   border-radius: 12px;
+  margin-bottom: 18px;
 }
 
 .panel h3 {
@@ -62,7 +63,8 @@ textarea {
 }
 
 .panel select,
-.panel button {
+.panel button,
+.panel input {
   width: 100%;
   margin-top: 10px;
 }
@@ -104,7 +106,8 @@ textarea {
 
 .form-grid input,
 .form-grid select,
-.form-grid textarea {
+.form-grid textarea,
+.sharepoint-form input {
   width: 100%;
   padding: 12px 14px;
   border-radius: 10px;
@@ -142,6 +145,19 @@ button.secondary {
 
 button.secondary:hover {
   background: #dfeaff;
+}
+
+.sharepoint-form {
+  display: grid;
+  gap: 10px;
+}
+
+.sharepoint-form label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-weight: 600;
 }
 
 .records-section {

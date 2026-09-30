@@ -1,92 +1,216 @@
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>SharePoint Document Automation</title>
-    <link rel="stylesheet" href="/styles.css" />
-  </head>
-  <body>
-    <div class="app-shell">
-      <aside class="sidebar">
-        <h1>Document Flow</h1>
-        <p class="subtitle">Automate Word templates using structured data.</p>
+const form = document.getElementById('recordForm');
+const recordList = document.getElementById('recordList');
+const templateSelect = document.getElementById('templateSelect');
+const downloadResult = document.getElementById('downloadResult');
+const statusText = document.getElementById('statusText');
+const sharepointConfigForm = document.getElementById('sharepointConfigForm');
 
-        <div class="panel">
-          <h3>Templates</h3>
-          <select id="templateSelect"></select>
-          <button id="generateBtn">Generate Word document</button>
-          <p id="downloadResult" class="result-text"></p>
-        </div>
-      </aside>
+let selectedRecordId = null;
 
-      <main class="main-panel">
-        <div class="topbar">
-          <h2>Important data list</h2>
-          <button id="newRecordBtn" class="secondary">New record</button>
-        </div>
+async function loadRecords() {
+  const response = await fetch('/api/records');
+  const records = await response.json();
 
-        <div class="status" id="statusText">Loading...</div>
+  recordList.innerHTML = records.length
+    ? records
+        .map(
+          (record) => `
+            <div class="record-card" data-id="${record.id}">
+              <h4>${record.name}</h4>
+              <p><strong>Project:</strong> ${record.projectName || '—'}</p>
+              <p><strong>Client:</strong> ${record.clientName || '—'}</p>
+              <p><strong>Status:</strong> ${record.status || '—'}</p>
+              <button class="secondary" data-select="${record.id}">Use this record</button>
+            </div>
+          `
+        )
+        .join('')
+    : '<p>No records yet.</p>';
 
-        <form id="recordForm" class="form-grid">
-          <div>
-            <label for="name">Record name</label>
-            <input id="name" name="name" type="text" placeholder="e.g. Q4 Client Launch" />
-          </div>
+  document.querySelectorAll('[data-select]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const id = button.getAttribute('data-select');
+      selectRecord(id);
+    });
+  });
+}
 
-          <div>
-            <label for="projectName">Project name</label>
-            <input id="projectName" name="projectName" type="text" placeholder="Project name" />
-          </div>
+async function loadTemplates() {
+  const response = await fetch('/api/templates');
+  const templates = await response.json();
+  templateSelect.innerHTML = templates
+    .map((template) => `<option value="${template.id}">${template.name}</option>`)
+    .join('');
+}
 
-          <div>
-            <label for="clientName">Client name</label>
-            <input id="clientName" name="clientName" type="text" placeholder="Client name" />
-          </div>
+async function loadSharePointConfig() {
+  const response = await fetch('/api/sharepoint/config');
+  const config = await response.json();
 
-          <div>
-            <label for="dueDate">Due date</label>
-            <input id="dueDate" name="dueDate" type="date" />
-          </div>
+  document.getElementById('sharepointEnabled').checked = !!config.enabled;
+  document.getElementById('sharepointSiteUrl').value = config.siteUrl || '';
+  document.getElementById('sharepointListName').value = config.listName || '';
+  document.getElementById('sharepointTenantId').value = config.tenantId || '';
+  document.getElementById('sharepointClientId').value = config.clientId || '';
+  document.getElementById('sharepointClientSecret').value = config.clientSecret || '';
+}
 
-          <div>
-            <label for="owner">Owner</label>
-            <input id="owner" name="owner" type="text" placeholder="Assigned owner" />
-          </div>
+async function selectRecord(recordId) {
+  selectedRecordId = recordId;
+  const response = await fetch('/api/records');
+  const records = await response.json();
+  const record = records.find((item) => item.id === recordId);
 
-          <div>
-            <label for="status">Status</label>
-            <select id="status" name="status">
-              <option value="Draft">Draft</option>
-              <option value="In review">In review</option>
-              <option value="Approved">Approved</option>
-              <option value="Completed">Completed</option>
-            </select>
-          </div>
+  if (!record) return;
 
-          <div class="full-width">
-            <label for="summary">Summary</label>
-            <textarea id="summary" name="summary" rows="4" placeholder="Enter the summary or context"></textarea>
-          </div>
+  document.getElementById('name').value = record.name || '';
+  document.getElementById('projectName').value = record.projectName || '';
+  document.getElementById('clientName').value = record.clientName || '';
+  document.getElementById('dueDate').value = record.dueDate || '';
+  document.getElementById('owner').value = record.owner || '';
+  document.getElementById('status').value = record.status || 'Draft';
+  document.getElementById('summary').value = record.summary || '';
+  document.getElementById('budget').value = record.budget || '';
 
-          <div>
-            <label for="budget">Budget</label>
-            <input id="budget" name="budget" type="text" placeholder="e.g. €84,000" />
-          </div>
+  statusText.textContent = `Selected record: ${record.name}`;
+}
 
-          <div class="full-width form-actions">
-            <button type="submit">Save record</button>
-          </div>
-        </form>
+form.addEventListener('submit', async (event) => {
+  event.preventDefault();
 
-        <section class="records-section">
-          <h3>Saved data</h3>
-          <div id="recordList" class="record-list"></div>
-        </section>
-      </main>
-    </div>
+  const payload = {
+    name: document.getElementById('name').value,
+    projectName: document.getElementById('projectName').value,
+    clientName: document.getElementById('clientName').value,
+    dueDate: document.getElementById('dueDate').value,
+    owner: document.getElementById('owner').value,
+    status: document.getElementById('status').value,
+    summary: document.getElementById('summary').value,
+    budget: document.getElementById('budget').value
+  };
 
-    <script src="/app.js"></script>
-  </body>
-</html>
+  const method = selectedRecordId ? 'PUT' : 'POST';
+  const url = selectedRecordId ? `/api/records/${selectedRecordId}` : '/api/records';
 
+  const response = await fetch(url, {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    statusText.textContent = 'Could not save the record.';
+    return;
+  }
+
+  selectedRecordId = null;
+  form.reset();
+  statusText.textContent = 'Record saved successfully.';
+  await loadRecords();
+});
+
+async function generateDocument() {
+  const records = await fetch('/api/records').then((res) => res.json());
+  const templateId = templateSelect.value;
+  const selected = selectedRecordId ? records.find((item) => item.id === selectedRecordId) : records[0];
+
+  if (!selected) {
+    statusText.textContent = 'Create a record before generating a document.';
+    return;
+  }
+
+  const response = await fetch('/api/documents/generate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      recordId: selected.id,
+      templateId
+    })
+  });
+
+  if (!response.ok) {
+    const payload = await response.json();
+    statusText.textContent = payload.message || 'Something went wrong.';
+    return;
+  }
+
+  const blob = await response.blob();
+  const downloadUrl = URL.createObjectURL(blob);
+  const fileName = response.headers.get('Content-Disposition')?.match(/filename="?(.+)"?/)?.[1] || 'document.docx';
+
+  const link = document.createElement('a');
+  link.href = downloadUrl;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+
+  downloadResult.textContent = `Generated: ${fileName}`;
+  statusText.textContent = 'Word document created.';
+}
+
+async function syncToSharePoint() {
+  const records = await fetch('/api/records').then((res) => res.json());
+  const selected = selectedRecordId ? records.find((item) => item.id === selectedRecordId) : records[0];
+
+  if (!selected) {
+    statusText.textContent = 'Select or create a record before syncing.';
+    return;
+  }
+
+  const response = await fetch(`/api/sharepoint/sync/${selected.id}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ templateId: templateSelect.value })
+  });
+
+  const payload = await response.json();
+
+  if (!response.ok) {
+    statusText.textContent = payload.message || 'SharePoint sync failed.';
+    return;
+  }
+
+  statusText.textContent = payload.message || 'SharePoint sync complete.';
+  downloadResult.textContent = payload.mode === 'live' ? 'Synced to SharePoint list' : 'Dry-run only: set SharePoint config to sync live';
+}
+
+sharepointConfigForm.addEventListener('submit', async (event) => {
+  event.preventDefault();
+
+  const configPayload = {
+    enabled: document.getElementById('sharepointEnabled').checked,
+    siteUrl: document.getElementById('sharepointSiteUrl').value,
+    listName: document.getElementById('sharepointListName').value,
+    tenantId: document.getElementById('sharepointTenantId').value,
+    clientId: document.getElementById('sharepointClientId').value,
+    clientSecret: document.getElementById('sharepointClientSecret').value
+  };
+
+  const response = await fetch('/api/sharepoint/config', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(configPayload)
+  });
+
+  if (!response.ok) {
+    statusText.textContent = 'Could not save SharePoint config.';
+    return;
+  }
+
+  statusText.textContent = 'SharePoint configuration saved.';
+});
+
+document.getElementById('generateBtn').addEventListener('click', generateDocument);
+document.getElementById('syncBtn').addEventListener('click', syncToSharePoint);
+document.getElementById('newRecordBtn').addEventListener('click', () => {
+  selectedRecordId = null;
+  form.reset();
+  statusText.textContent = 'Ready for a new record.';
+});
+
+(async () => {
+  await loadRecords();
+  await loadTemplates();
+  await loadSharePointConfig();
+})();
