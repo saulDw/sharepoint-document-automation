@@ -1,0 +1,23 @@
+{
+  "name": "sharepoint-document-automation",
+  "version": "1.0.0",
+  "description": "Webapp to manage important data and generate Word templates with SharePoint-ready automation patterns.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": [
+    "sharepoint",
+    "word",
+    "automation",
+    "documents",
+    "workflow"
+  ],
+  "author": "saulDw",
+  "license": "MIT",
+  "dependencies": {
+    "docx": "^8.5.0",
+    "express": "^4.19.2",
+    "uuid": "^9.0.0"
+  }
+}

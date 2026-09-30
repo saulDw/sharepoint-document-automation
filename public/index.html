@@ -1,0 +1,150 @@
+const form = document.getElementById('recordForm');
+const recordList = document.getElementById('recordList');
+const templateSelect = document.getElementById('templateSelect');
+const downloadResult = document.getElementById('downloadResult');
+const statusText = document.getElementById('statusText');
+
+async function loadRecords() {
+  const response = await fetch('/api/records');
+  const records = await response.json();
+
+  recordList.innerHTML = records.length
+    ? records
+        .map(
+          (record) => `
+            <div class="record-card" data-id="${record.id}">
+              <h4>${record.name}</h4>
+              <p><strong>Project:</strong> ${record.projectName || '—'}</p>
+              <p><strong>Client:</strong> ${record.clientName || '—'}</p>
+              <p><strong>Status:</strong> ${record.status || '—'}</p>
+              <button class="secondary" data-select="${record.id}">Use this record</button>
+            </div>
+          `
+        )
+        .join('')
+    : '<p>No records yet.</p>';
+
+  // wire select buttons
+  document.querySelectorAll('[data-select]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const id = button.getAttribute('data-select');
+      selectRecord(id);
+    });
+  });
+}
+
+async function loadTemplates() {
+  const response = await fetch('/api/templates');
+  const templates = await response.json();
+  templateSelect.innerHTML = templates
+    .map((template) => `<option value="${template.id}">${template.name}</option>`)
+    .join('');
+}
+
+let selectedRecordId = null;
+
+async function selectRecord(recordId) {
+  selectedRecordId = recordId;
+  const response = await fetch('/api/records');
+  const records = await response.json();
+  const record = records.find((item) => item.id === recordId);
+
+  if (!record) return;
+
+  document.getElementById('name').value = record.name || '';
+  document.getElementById('projectName').value = record.projectName || '';
+  document.getElementById('clientName').value = record.clientName || '';
+  document.getElementById('dueDate').value = record.dueDate || '';
+  document.getElementById('owner').value = record.owner || '';
+  document.getElementById('status').value = record.status || 'Draft';
+  document.getElementById('summary').value = record.summary || '';
+  document.getElementById('budget').value = record.budget || '';
+
+  statusText.textContent = `Selected record: ${record.name}`;
+}
+
+form.addEventListener('submit', async (event) => {
+  event.preventDefault();
+
+  const payload = {
+    name: document.getElementById('name').value,
+    projectName: document.getElementById('projectName').value,
+    clientName: document.getElementById('clientName').value,
+    dueDate: document.getElementById('dueDate').value,
+    owner: document.getElementById('owner').value,
+    status: document.getElementById('status').value,
+    summary: document.getElementById('summary').value,
+    budget: document.getElementById('budget').value
+  };
+
+  const method = selectedRecordId ? 'PUT' : 'POST';
+  const url = selectedRecordId ? `/api/records/${selectedRecordId}` : '/api/records';
+
+  const response = await fetch(url, {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    statusText.textContent = 'Could not save the record.';
+    return;
+  }
+
+  selectedRecordId = null;
+  form.reset();
+  statusText.textContent = 'Record saved successfully.';
+  await loadRecords();
+});
+
+async function generateDocument() {
+  const templateId = templateSelect.value;
+  const records = await fetch('/api/records').then((res) => res.json());
+  const selected = records[0];
+
+  if (!selected) {
+    statusText.textContent = 'Create a record before generating a document.';
+    return;
+  }
+
+  const response = await fetch('/api/documents/generate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      recordId: selected.id,
+      templateId
+    })
+  });
+
+  if (!response.ok) {
+    const payload = await response.json();
+    statusText.textContent = payload.message || 'Something went wrong.';
+    return;
+  }
+
+  const blob = await response.blob();
+  const downloadUrl = URL.createObjectURL(blob);
+  const fileName = response.headers.get('Content-Disposition')?.match(/filename="?(.+)"?/)?.[1] || 'document.docx';
+
+  const link = document.createElement('a');
+  link.href = downloadUrl;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+
+  downloadResult.textContent = `Generated: ${fileName}`;
+  statusText.textContent = 'Word document created.';
+}
+
+document.getElementById('generateBtn').addEventListener('click', generateDocument);
+document.getElementById('newRecordBtn').addEventListener('click', () => {
+  selectedRecordId = null;
+  form.reset();
+  statusText.textContent = 'Ready for a new record.';
+});
+
+(async () => {
+  await loadRecords();
+  await loadTemplates();
+})();
